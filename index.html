@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Page Replacement Visualizer - FIFO / LRU / Optimal</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<main class="container">
+  <h1 >Page Replacement Visualizer</h1>
+  <section class="controls">
+    <label>Reference string (comma or space separated):
+      <input id="refInput" placeholder="e.g. 7, 0, 1, 2, 0, 3, 0, 4" />
+    </label>
+    <label>Number of frames:
+      <input id="framesInput" type="number" min="1" value="3" />
+    </label>
+    <label>Algorithm:
+      <select id="algoSelect">
+        <option>FIFO</option>
+        <option>LRU</option>
+        <option>Optimal</option>
+      </select>
+    </label>
+    <div class="buttons">
+      <button id="simulateBtn">Simulate</button>
+      <button id="stepBtn" disabled>Step</button>
+      <button id="playBtn" disabled>Play</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+  </section>
+
+  <section class="summary">
+    <div>Hits: <span id="hits">0</span></div>
+    <div>Faults: <span id="faults">0</span></div>
+    <div>Step: <span id="step">0</span> / <span id="totalSteps">0</span></div>
+  </section>
+
+  <section id="visual" class="visual">
+    <!-- Grid will be injected here -->
+  </section>
+
+  <footer class="footer">
+    Page Replacement Visualizer - FIFO / LRU / Optimal
+  </footer>
+  <section class="group-table">
+  <h2>Group Details</h2>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Roll No.</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Aradhya Patil</td><td>23202A0001</td></tr>
+      <tr><td>Arnel Anthony Roy</td><td>23202A0003</td></tr>
+      <tr><td>Shardul Gurav</td><td>23202A0017</td></tr>
+      <tr><td>Vedant Pawar</td><td>23202A0020</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+<script src="script.js"></script>
+</body>
+</html>
