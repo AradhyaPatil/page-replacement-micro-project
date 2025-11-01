@@ -14,19 +14,6 @@ const totalStepsEl = document.getElementById('totalSteps');
 
 let state = null;
 let playInterval = null;
-let playbackTimers = [];
-let currentlyAnimatingCell = null;
-let currentlyHighlightedColumn = null;
-
-const PLAYBACK_CONFIG = {
-  stepDuration: 700,
-  animationDuration: 500,
-};
-
-function clearPlaybackTimers() {
-  playbackTimers.forEach(timerId => clearTimeout(timerId));
-  playbackTimers = [];
-}
 
 function parseRefString(s){
   if(!s) return [];
@@ -52,28 +39,27 @@ function simulate(refs, frames, algo){
     }
     return steps;
   } else if(algo === 'LRU'){
-    const frameArr = new Array(frames).fill(null);
-    const accessOrder = [];
+    const arr = [];
     for(const r of refs){
-      const frameIdx = frameArr.indexOf(r);
-      const hit = frameIdx !== -1;
+      const idx = arr.indexOf(r);
+      const hit = idx !== -1;
       if(hit){
-        const orderIdx = accessOrder.indexOf(frameIdx);
-        accessOrder.splice(orderIdx, 1);
-        accessOrder.push(frameIdx);
-        steps.push({ref:r, frames:[...frameArr], hit:true});
+        // move to most recently used end
+        arr.splice(idx,1);
+        arr.push(r);
+        const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
+        steps.push({ref:r, frames:display, hit:true});
         continue;
       }
-      let targetFrame;
-      if(accessOrder.length < frames){
-        targetFrame = accessOrder.length;
-        accessOrder.push(targetFrame);
+      // fault
+      if(arr.length < frames){
+        arr.push(r);
       } else {
-        targetFrame = accessOrder.shift();
-        accessOrder.push(targetFrame);
+        arr.shift(); // remove least recently used
+        arr.push(r);
       }
-      frameArr[targetFrame] = r;
-      steps.push({ref:r, frames:[...frameArr], hit:false, replacedAt:targetFrame});
+      const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
+      steps.push({ref:r, frames:display, hit:false});
     }
     return steps;
   } else if(algo === 'Optimal'){
@@ -145,14 +131,11 @@ function buildGrid(steps, refs, frames){
     for(let s=0; s<steps.length; s++){
       const cell = document.createElement('div');
       cell.className = 'cell';
+      cell.setAttribute('data-step', s); // Mark which step this cell belongs to
       const val = steps[s].frames[f];
       cell.textContent = val === null || val === undefined ? '' : String(val);
-      // mark hit/fault by comparing with current ref and presence
-      const isHit = steps[s].hit && steps[s].frames.includes(steps[s].ref);
-      // we will mark cells where the displayed value equals the current ref as either hit or fault
-      if(val === steps[s].ref){
-        cell.classList.add(steps[s].hit ? 'hit' : 'fault');
-      }
+      // Initially hide all cells - they'll be revealed during step/play
+      cell.style.visibility = 'hidden';
       row.appendChild(cell);
     }
     grid.appendChild(row);
@@ -189,42 +172,12 @@ function prepareAndStart(){
   simulateBtn.disabled = true;
 }
 
-function clearColumnHighlight() {
-  if(currentlyHighlightedColumn !== null) {
-    const gridRows = visual.querySelectorAll('.grid .row');
-    gridRows.forEach(row => {
-      const cell = row.children[currentlyHighlightedColumn + 1];
-      if(cell) cell.classList.remove('current-step');
-    });
-    currentlyHighlightedColumn = null;
-  }
-}
-
 function resetAll(){
   if(playInterval) { clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play'; }
-  clearPlaybackTimers();
-  clearColumnHighlight();
-  if(currentlyAnimatingCell) {
-    currentlyAnimatingCell.classList.remove('active', 'playing');
-    currentlyAnimatingCell = null;
-  }
   state = null;
   visual.innerHTML = '';
   hitsEl.textContent = '0'; faultsEl.textContent = '0'; stepEl.textContent = '0'; totalStepsEl.textContent = '0';
   stepBtn.disabled = true; playBtn.disabled = true; simulateBtn.disabled = false;
-}
-
-function highlightCurrentStepColumn(columnIndex) {
-  clearColumnHighlight();
-
-  const gridRows = visual.querySelectorAll('.grid .row');
-  gridRows.forEach(row => {
-    const cell = row.children[columnIndex + 1];
-    if(cell) cell.classList.add('current-step');
-  });
-
-  currentlyHighlightedColumn = columnIndex;
-  stepEl.textContent = columnIndex + 1;
 }
 
 simulateBtn.addEventListener('click', ()=>{
@@ -233,90 +186,54 @@ simulateBtn.addEventListener('click', ()=>{
 
 stepBtn.addEventListener('click', ()=>{
   if(!state) return;
-  if(state.idx >= state.steps.length) return;
-  highlightCurrentStepColumn(state.idx);
+  // If we reached the end, reset to start
+  if(state.idx >= state.steps.length){
+    state.idx = 0;
+    // Clear all highlights and hide all cells
+    visual.querySelectorAll('.cell').forEach(c=> { 
+      c.style.boxShadow = ''; 
+      c.classList.remove('hit','fault');
+      c.style.visibility = 'hidden';
+    });
+    stepEl.textContent = 0;
+    faultsEl.textContent = 0;
+  }
+  highlightStep(state.idx);
   state.idx++;
 });
 
-function animateBlocksForStep(stepIndex, step) {
-  const gridRows = visual.querySelectorAll('.grid .row');
-
-  gridRows.forEach(row => {
-    const cell = row.children[stepIndex + 1];
-    if(!cell) return;
-
-    const frameValue = cell.textContent;
-    const isRelevant = frameValue === String(step.ref);
-
-    if(isRelevant) {
-      if(currentlyAnimatingCell) {
-        currentlyAnimatingCell.classList.remove('active', 'playing');
-      }
-
-      cell.classList.add('active', 'playing');
-      currentlyAnimatingCell = cell;
-
-      const timerId = setTimeout(() => {
-        cell.classList.remove('active', 'playing');
-        if(currentlyAnimatingCell === cell) {
-          currentlyAnimatingCell = null;
-        }
-      }, PLAYBACK_CONFIG.animationDuration);
-
-      playbackTimers.push(timerId);
-    }
-  });
-}
-
-function stopPlayback() {
-  if(playInterval) {
-    clearInterval(playInterval);
-    playInterval = null;
-  }
-  clearPlaybackTimers();
-  if(currentlyAnimatingCell) {
-    currentlyAnimatingCell.classList.remove('active', 'playing');
-    currentlyAnimatingCell = null;
-  }
-}
-
 playBtn.addEventListener('click', ()=>{
   if(!state) return;
-
   if(playInterval){
-    stopPlayback();
-    playBtn.textContent = 'Play';
+    clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play';
     return;
   }
-
+  // If we reached the end, reset to start before playing
+  if(state.idx >= state.steps.length){
+    state.idx = 0;
+    // Clear all highlights and hide all cells
+    visual.querySelectorAll('.cell').forEach(c=> { 
+      c.style.boxShadow = ''; 
+      c.classList.remove('hit','fault');
+      c.style.visibility = 'hidden';
+    });
+    stepEl.textContent = 0;
+    faultsEl.textContent = 0;
+  }
   playBtn.textContent = 'Pause';
-
-  const playNextStep = () => {
+  playInterval = setInterval(()=>{
     if(state.idx >= state.steps.length){
-      stopPlayback();
-      playBtn.textContent = 'Play';
+      clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play';
       return;
     }
-
-    const stepIndex = state.idx;
-    const step = state.steps[stepIndex];
-
-    highlightCurrentStepColumn(stepIndex);
-    animateBlocksForStep(stepIndex, step);
-
+    highlightStep(state.idx);
     state.idx++;
-
-    const timerId = setTimeout(playNextStep, PLAYBACK_CONFIG.stepDuration);
-    playbackTimers.push(timerId);
-  };
-
-  playNextStep();
-
-  playInterval = true;
+  }, 700);
 });
 
 resetBtn.addEventListener('click', resetAll);
 
+// keyboard shortcuts: Space to step when prepared
 document.addEventListener('keydown', (e)=>{
   if(e.code === 'Space' && !e.repeat){
     if(!state) return;
@@ -324,4 +241,88 @@ document.addEventListener('keydown', (e)=>{
     e.preventDefault();
   }
 });
+
+function highlightStep(i){
+  if(!state) return;
+  const cells = visual.querySelectorAll('.grid .row');
+  // Clear only box shadows, but keep hit/fault classes from previous steps
+  visual.querySelectorAll('.cell').forEach(c=> { c.style.boxShadow = ''; });
+  
+  // Reveal all cells up to and including the current step
+  visual.querySelectorAll('.cell').forEach(c => {
+    const stepNum = parseInt(c.getAttribute('data-step'));
+    if(stepNum <= i){
+      c.style.visibility = 'visible';
+    }
+  });
+  
+  const currentStep = state.steps[i];
+  const gridRows = visual.querySelectorAll('.grid .row');
+  
+  // Find which frame position changed or was accessed FIRST
+  let changedFrameIndex = -1;
+  
+  if(currentStep.hit){
+    // On a hit, highlight the frame that contains the referenced page
+    for(let f=0; f<currentStep.frames.length; f++){
+      if(currentStep.frames[f] === currentStep.ref){
+        changedFrameIndex = f;
+        break;
+      }
+    }
+  } else {
+    // On a fault, check if replacedAt is specified
+    if(currentStep.replacedAt !== undefined){
+      changedFrameIndex = currentStep.replacedAt;
+    } else {
+      // For LRU or when no replacedAt is specified, compare with previous step
+      if(i > 0){
+        const prevFrames = state.steps[i-1].frames;
+        for(let f=0; f<currentStep.frames.length; f++){
+          if(currentStep.frames[f] !== prevFrames[f]){
+            changedFrameIndex = f;
+            break;
+          }
+        }
+      } else {
+        // First step - find the first non-null frame
+        for(let f=0; f<currentStep.frames.length; f++){
+          if(currentStep.frames[f] !== null){
+            changedFrameIndex = f;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  // Lightly outline ALL cells in the current column EXCEPT the changed one
+  gridRows.forEach((row, rowIndex) => {
+    const colCell = row.children[i+1]; // +1 for label cell
+    if(colCell && rowIndex !== changedFrameIndex){
+      colCell.style.boxShadow = 'inset 0 0 0 2px rgba(37,99,235,0.12)';
+    }
+  });
+  
+  // Highlight only the changed cell with stronger border and hit/fault color
+  if(changedFrameIndex !== -1 && gridRows[changedFrameIndex]){
+    const cell = gridRows[changedFrameIndex].children[i+1]; // +1 because first child is label
+    if(cell){
+      // Use green for hit, red for fault as the highlight color
+      const highlightColor = currentStep.hit ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+      cell.style.boxShadow = `inset 0 0 0 3px ${highlightColor}`;
+      // Mark hit/fault color - this will persist after the step
+      cell.classList.add(currentStep.hit ? 'hit' : 'fault');
+    }
+  }
+  
+  stepEl.textContent = i+1;
+
+  // update faults dynamically
+  let faultCount = 0;
+  for(let s=0; s<=i; s++){
+    if(!state.steps[s].hit) faultCount++;
+  }
+  faultsEl.textContent = faultCount;
+}
 
