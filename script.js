@@ -39,27 +39,28 @@ function simulate(refs, frames, algo){
     }
     return steps;
   } else if(algo === 'LRU'){
-    const arr = [];
+    const frameArr = new Array(frames).fill(null);
+    const accessOrder = [];
     for(const r of refs){
-      const idx = arr.indexOf(r);
-      const hit = idx !== -1;
+      const frameIdx = frameArr.indexOf(r);
+      const hit = frameIdx !== -1;
       if(hit){
-        // move to most recently used end
-        arr.splice(idx,1);
-        arr.push(r);
-        const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
-        steps.push({ref:r, frames:display, hit:true});
+        const orderIdx = accessOrder.indexOf(frameIdx);
+        accessOrder.splice(orderIdx, 1);
+        accessOrder.push(frameIdx);
+        steps.push({ref:r, frames:[...frameArr], hit:true});
         continue;
       }
-      // fault
-      if(arr.length < frames){
-        arr.push(r);
+      let targetFrame;
+      if(accessOrder.length < frames){
+        targetFrame = accessOrder.length;
+        accessOrder.push(targetFrame);
       } else {
-        arr.shift(); // remove least recently used
-        arr.push(r);
+        targetFrame = accessOrder.shift();
+        accessOrder.push(targetFrame);
       }
-      const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
-      steps.push({ref:r, frames:display, hit:false});
+      frameArr[targetFrame] = r;
+      steps.push({ref:r, frames:[...frameArr], hit:false, replacedAt:targetFrame});
     }
     return steps;
   } else if(algo === 'Optimal'){
