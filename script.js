@@ -2,6 +2,7 @@
 const refInput = document.getElementById('refInput');
 const framesInput = document.getElementById('framesInput');
 const algoSelect = document.getElementById('algoSelect');
+const speedSelect = document.getElementById('speedSelect');
 const simulateBtn = document.getElementById('simulateBtn');
 const stepBtn = document.getElementById('stepBtn');
 const playBtn = document.getElementById('playBtn');
@@ -14,6 +15,21 @@ const totalStepsEl = document.getElementById('totalSteps');
 
 let state = null;
 let playInterval = null;
+let playbackTimers = [];
+let currentlyAnimatingCell = null;
+
+function getPlaybackDuration() {
+  return Number(speedSelect.value) || 700;
+}
+
+const PLAYBACK_CONFIG = {
+  animationDuration: 500,
+};
+
+function clearPlaybackTimers() {
+  playbackTimers.forEach(timerId => clearTimeout(timerId));
+  playbackTimers = [];
+}
 
 function parseRefString(s){
   if(!s) return [];
@@ -178,6 +194,11 @@ function prepareAndStart(){
 
 function resetAll(){
   if(playInterval) { clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play'; }
+  clearPlaybackTimers();
+  if(currentlyAnimatingCell) {
+    currentlyAnimatingCell.classList.remove('active', 'playing');
+    currentlyAnimatingCell = null;
+  }
   state = null;
   visual.innerHTML = '';
   hitsEl.textContent = '0'; faultsEl.textContent = '0'; stepEl.textContent = '0'; totalStepsEl.textContent = '0';
@@ -211,21 +232,82 @@ stepBtn.addEventListener('click', ()=>{
   state.idx++;
 });
 
+function animateBlocksForStep(stepIndex, step) {
+  const gridRows = visual.querySelectorAll('.grid .row');
+
+  gridRows.forEach(row => {
+    const cell = row.children[stepIndex + 1];
+    if(!cell) return;
+
+    const frameValue = cell.textContent;
+    const isRelevant = frameValue === String(step.ref);
+
+    if(isRelevant) {
+      if(currentlyAnimatingCell) {
+        currentlyAnimatingCell.classList.remove('active', 'playing');
+      }
+
+      cell.classList.add('active', 'playing');
+      currentlyAnimatingCell = cell;
+
+      const timerId = setTimeout(() => {
+        cell.classList.remove('active', 'playing');
+        if(currentlyAnimatingCell === cell) {
+          currentlyAnimatingCell = null;
+        }
+      }, PLAYBACK_CONFIG.animationDuration);
+
+      playbackTimers.push(timerId);
+    }
+  });
+}
+
+function stopPlayback() {
+  if(playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+  }
+  clearPlaybackTimers();
+  if(currentlyAnimatingCell) {
+    currentlyAnimatingCell.classList.remove('active', 'playing');
+    currentlyAnimatingCell = null;
+  }
+}
+
 playBtn.addEventListener('click', ()=>{
   if(!state) return;
+
   if(playInterval){
-    clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play';
+    stopPlayback();
+    playBtn.textContent = 'Play';
     return;
   }
+
   playBtn.textContent = 'Pause';
-  playInterval = setInterval(()=>{
+
+  const playNextStep = () => {
     if(state.idx >= state.steps.length){
-      clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play';
+      stopPlayback();
+      playBtn.textContent = 'Play';
       return;
     }
-    highlightStep(state.idx);
+
+    const stepIndex = state.idx;
+    const step = state.steps[stepIndex];
+
+    highlightStep(stepIndex);
+    animateBlocksForStep(stepIndex, step);
+
     state.idx++;
-  }, 700);
+
+    const stepDuration = getPlaybackDuration();
+    const timerId = setTimeout(playNextStep, stepDuration);
+    playbackTimers.push(timerId);
+  };
+
+  playNextStep();
+
+  playInterval = true;
 });
 
 resetBtn.addEventListener('click', resetAll);
