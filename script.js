@@ -2,7 +2,6 @@
 const refInput = document.getElementById('refInput');
 const framesInput = document.getElementById('framesInput');
 const algoSelect = document.getElementById('algoSelect');
-const speedSelect = document.getElementById('speedSelect');
 const simulateBtn = document.getElementById('simulateBtn');
 const stepBtn = document.getElementById('stepBtn');
 const playBtn = document.getElementById('playBtn');
@@ -17,12 +16,10 @@ let state = null;
 let playInterval = null;
 let playbackTimers = [];
 let currentlyAnimatingCell = null;
-
-function getPlaybackDuration() {
-  return Number(speedSelect.value) || 700;
-}
+let currentlyHighlightedColumn = null;
 
 const PLAYBACK_CONFIG = {
+  stepDuration: 700,
   animationDuration: 500,
 };
 
@@ -192,9 +189,21 @@ function prepareAndStart(){
   simulateBtn.disabled = true;
 }
 
+function clearColumnHighlight() {
+  if(currentlyHighlightedColumn !== null) {
+    const gridRows = visual.querySelectorAll('.grid .row');
+    gridRows.forEach(row => {
+      const cell = row.children[currentlyHighlightedColumn + 1];
+      if(cell) cell.classList.remove('current-step');
+    });
+    currentlyHighlightedColumn = null;
+  }
+}
+
 function resetAll(){
   if(playInterval) { clearInterval(playInterval); playInterval = null; playBtn.textContent = 'Play'; }
   clearPlaybackTimers();
+  clearColumnHighlight();
   if(currentlyAnimatingCell) {
     currentlyAnimatingCell.classList.remove('active', 'playing');
     currentlyAnimatingCell = null;
@@ -205,20 +214,17 @@ function resetAll(){
   stepBtn.disabled = true; playBtn.disabled = true; simulateBtn.disabled = false;
 }
 
-function highlightStep(i){
-  if(!state) return;
-  const cells = visual.querySelectorAll('.grid .row');
-  // Instead of complex per-cell toggles we will scroll into view the column and add a small border
-  // Reset borders
-  visual.querySelectorAll('.cell').forEach(c=> c.style.boxShadow = '');
-  // mark column i by adding boxShadow to each cell in that column
+function highlightCurrentStepColumn(columnIndex) {
+  clearColumnHighlight();
+
   const gridRows = visual.querySelectorAll('.grid .row');
-  gridRows.forEach(row=>{
-    const cell = row.children[i+1]; // +1 because first child is label
-    if(cell) cell.style.boxShadow = 'inset 0 0 0 2px rgba(37,99,235,0.12)';
+  gridRows.forEach(row => {
+    const cell = row.children[columnIndex + 1];
+    if(cell) cell.classList.add('current-step');
   });
-  // update step counters
-  stepEl.textContent = i+1;
+
+  currentlyHighlightedColumn = columnIndex;
+  stepEl.textContent = columnIndex + 1;
 }
 
 simulateBtn.addEventListener('click', ()=>{
@@ -228,7 +234,7 @@ simulateBtn.addEventListener('click', ()=>{
 stepBtn.addEventListener('click', ()=>{
   if(!state) return;
   if(state.idx >= state.steps.length) return;
-  highlightStep(state.idx);
+  highlightCurrentStepColumn(state.idx);
   state.idx++;
 });
 
@@ -295,13 +301,12 @@ playBtn.addEventListener('click', ()=>{
     const stepIndex = state.idx;
     const step = state.steps[stepIndex];
 
-    highlightStep(stepIndex);
+    highlightCurrentStepColumn(stepIndex);
     animateBlocksForStep(stepIndex, step);
 
     state.idx++;
 
-    const stepDuration = getPlaybackDuration();
-    const timerId = setTimeout(playNextStep, stepDuration);
+    const timerId = setTimeout(playNextStep, PLAYBACK_CONFIG.stepDuration);
     playbackTimers.push(timerId);
   };
 
@@ -312,7 +317,6 @@ playBtn.addEventListener('click', ()=>{
 
 resetBtn.addEventListener('click', resetAll);
 
-// keyboard shortcuts: Space to step when prepared
 document.addEventListener('keydown', (e)=>{
   if(e.code === 'Space' && !e.repeat){
     if(!state) return;
@@ -320,23 +324,4 @@ document.addEventListener('keydown', (e)=>{
     e.preventDefault();
   }
 });
-
-function highlightStep(i){
-  if(!state) return;
-  const cells = visual.querySelectorAll('.grid .row');
-  visual.querySelectorAll('.cell').forEach(c=> c.style.boxShadow = '');
-  const gridRows = visual.querySelectorAll('.grid .row');
-  gridRows.forEach(row=>{
-    const cell = row.children[i+1]; // +1 because first child is label
-    if(cell) cell.style.boxShadow = 'inset 0 0 0 2px rgba(37,99,235,0.12)';
-  });
-  stepEl.textContent = i+1;
-
-  // update faults dynamically
-  let faultCount = 0;
-  for(let s=0; s<=i; s++){
-    if(!state.steps[s].hit) faultCount++;
-  }
-  faultsEl.textContent = faultCount;
-}
 
