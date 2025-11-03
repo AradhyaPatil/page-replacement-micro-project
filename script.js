@@ -192,7 +192,7 @@ stepBtn.addEventListener('click', ()=>{
     // Clear all highlights and hide all cells
     visual.querySelectorAll('.cell').forEach(c=> { 
       c.style.boxShadow = ''; 
-      c.classList.remove('hit','fault');
+      c.classList.remove('hit','fault','reveal');
       c.style.visibility = 'hidden';
     });
     stepEl.textContent = 0;
@@ -214,7 +214,7 @@ playBtn.addEventListener('click', ()=>{
     // Clear all highlights and hide all cells
     visual.querySelectorAll('.cell').forEach(c=> { 
       c.style.boxShadow = ''; 
-      c.classList.remove('hit','fault');
+      c.classList.remove('hit','fault','reveal');
       c.style.visibility = 'hidden';
     });
     stepEl.textContent = 0;
@@ -248,10 +248,14 @@ function highlightStep(i){
   // Clear only box shadows, but keep hit/fault classes from previous steps
   visual.querySelectorAll('.cell').forEach(c=> { c.style.boxShadow = ''; });
   
-  // Reveal all cells up to and including the current step
+  // Reveal all cells up to and including the current step with animation
   visual.querySelectorAll('.cell').forEach(c => {
     const stepNum = parseInt(c.getAttribute('data-step'));
     if(stepNum <= i){
+      // Only add reveal animation to the current step's new cells
+      if(stepNum === i && c.style.visibility === 'hidden'){
+        c.classList.add('reveal');
+      }
       c.style.visibility = 'visible';
     }
   });
