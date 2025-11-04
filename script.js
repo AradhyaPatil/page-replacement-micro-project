@@ -121,7 +121,8 @@ function buildGrid(steps, refs, frames){
   grid.style.gridTemplateRows = `repeat(${frames}, auto)`;
   visual.appendChild(grid);
 
-  for(let f=0; f<frames; f++){
+  // Build frames in descending order (frames-1 down to 0)
+  for(let f=frames-1; f>=0; f--){
     const row = document.createElement('div');
     row.className = 'row';
     const label = document.createElement('div');
@@ -132,6 +133,7 @@ function buildGrid(steps, refs, frames){
       const cell = document.createElement('div');
       cell.className = 'cell';
       cell.setAttribute('data-step', s); // Mark which step this cell belongs to
+      cell.setAttribute('data-frame', f); // Mark which frame this cell belongs to
       const val = steps[s].frames[f];
       cell.textContent = val === null || val === undefined ? '' : String(val);
       // Initially hide all cells - they'll be revealed during step/play
@@ -301,22 +303,29 @@ function highlightStep(i){
   }
   
   // Lightly outline ALL cells in the current column EXCEPT the changed one
+  // Note: Rows are in reverse order (frames-1 to 0), so we need to map frame index to row index
+  const totalFrames = state.frames;
   gridRows.forEach((row, rowIndex) => {
     const colCell = row.children[i+1]; // +1 for label cell
-    if(colCell && rowIndex !== changedFrameIndex){
+    const actualFrameIndex = totalFrames - 1 - rowIndex; // Convert row index to frame index
+    if(colCell && actualFrameIndex !== changedFrameIndex){
       colCell.style.boxShadow = 'inset 0 0 0 2px rgba(37,99,235,0.12)';
     }
   });
   
   // Highlight only the changed cell with stronger border and hit/fault color
-  if(changedFrameIndex !== -1 && gridRows[changedFrameIndex]){
-    const cell = gridRows[changedFrameIndex].children[i+1]; // +1 because first child is label
-    if(cell){
-      // Use green for hit, red for fault as the highlight color
-      const highlightColor = currentStep.hit ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)';
-      cell.style.boxShadow = `inset 0 0 0 3px ${highlightColor}`;
-      // Mark hit/fault color - this will persist after the step
-      cell.classList.add(currentStep.hit ? 'hit' : 'fault');
+  if(changedFrameIndex !== -1){
+    // Convert frame index to row index (reverse order)
+    const rowIndex = totalFrames - 1 - changedFrameIndex;
+    if(gridRows[rowIndex]){
+      const cell = gridRows[rowIndex].children[i+1]; // +1 because first child is label
+      if(cell){
+        // Use green for hit, red for fault as the highlight color
+        const highlightColor = currentStep.hit ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+        cell.style.boxShadow = `inset 0 0 0 3px ${highlightColor}`;
+        // Mark hit/fault color - this will persist after the step
+        cell.classList.add(currentStep.hit ? 'hit' : 'fault');
+      }
     }
   }
   
