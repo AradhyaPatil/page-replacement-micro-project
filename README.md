@@ -1,5 +1,5 @@
 
-# Page Replacement Visualizer (Minimal)
+# Page Replacement Visualizer
 
 A single-page micro-project to visualize Page Replacement Algorithms: FIFO, LRU, Optimal.
 
