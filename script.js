@@ -39,28 +39,48 @@ function simulate(refs, frames, algo){
     }
     return steps;
   } else if(algo === 'LRU'){
-    const arr = [];
-    for(const r of refs){
-      const idx = arr.indexOf(r);
-      const hit = idx !== -1;
+    const frameArr = new Array(frames).fill(null);
+    const lastUsed = {}; // keeps track of last used index of each page
+
+    for(let i = 0; i < refs.length; i++){
+      const r = refs[i];
+      const hit = frameArr.includes(r);
+
       if(hit){
-        // move to most recently used end
-        arr.splice(idx,1);
-        arr.push(r);
-        const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
-        steps.push({ref:r, frames:display, hit:true});
+        // Update last used time
+        lastUsed[r] = i;
+        // Find which frame contains this page for highlighting
+        const frameIdx = frameArr.indexOf(r);
+        steps.push({ref: r, frames: [...frameArr], hit: true, replacedAt: frameIdx});
         continue;
       }
-      // fault
-      if(arr.length < frames){
-        arr.push(r);
+
+      // Page fault
+      let replaceIdx = -1;
+
+      if(frameArr.includes(null)){
+        // Fill empty frame first
+        replaceIdx = frameArr.indexOf(null);
       } else {
-        arr.shift(); // remove least recently used
-        arr.push(r);
+        // Find least recently used page (smallest lastUsed index)
+        let lruPage = null;
+        let minUsed = Infinity;
+        for(const page of frameArr){
+          if(lastUsed[page] < minUsed){
+            minUsed = lastUsed[page];
+            lruPage = page;
+          }
+        }
+        replaceIdx = frameArr.indexOf(lruPage);
       }
-      const display = Array.from({length:frames}, (_,i)=> arr[i] ?? null);
-      steps.push({ref:r, frames:display, hit:false});
+
+      // Replace LRU page with current reference
+      frameArr[replaceIdx] = r;
+      lastUsed[r] = i;
+
+      steps.push({ref: r, frames: [...frameArr], hit: false, replacedAt: replaceIdx});
     }
+
     return steps;
   } else if(algo === 'Optimal'){
     const arr = [];
@@ -265,11 +285,14 @@ function highlightStep(i){
   const currentStep = state.steps[i];
   const gridRows = visual.querySelectorAll('.grid .row');
   
-  // Find which frame position changed or was accessed FIRST
+  // Find which frame position changed or was accessed
   let changedFrameIndex = -1;
   
-  if(currentStep.hit){
-    // On a hit, highlight the frame that contains the referenced page
+  // Use replacedAt if available (for both hits and faults)
+  if(currentStep.replacedAt !== undefined){
+    changedFrameIndex = currentStep.replacedAt;
+  } else if(currentStep.hit){
+    // Fallback: On a hit, find the frame that contains the referenced page
     for(let f=0; f<currentStep.frames.length; f++){
       if(currentStep.frames[f] === currentStep.ref){
         changedFrameIndex = f;
@@ -277,26 +300,21 @@ function highlightStep(i){
       }
     }
   } else {
-    // On a fault, check if replacedAt is specified
-    if(currentStep.replacedAt !== undefined){
-      changedFrameIndex = currentStep.replacedAt;
-    } else {
-      // For LRU or when no replacedAt is specified, compare with previous step
-      if(i > 0){
-        const prevFrames = state.steps[i-1].frames;
-        for(let f=0; f<currentStep.frames.length; f++){
-          if(currentStep.frames[f] !== prevFrames[f]){
-            changedFrameIndex = f;
-            break;
-          }
+    // Fallback: For faults without replacedAt, compare with previous step
+    if(i > 0){
+      const prevFrames = state.steps[i-1].frames;
+      for(let f=0; f<currentStep.frames.length; f++){
+        if(currentStep.frames[f] !== prevFrames[f]){
+          changedFrameIndex = f;
+          break;
         }
-      } else {
-        // First step - find the first non-null frame
-        for(let f=0; f<currentStep.frames.length; f++){
-          if(currentStep.frames[f] !== null){
-            changedFrameIndex = f;
-            break;
-          }
+      }
+    } else {
+      // First step - find the first non-null frame
+      for(let f=0; f<currentStep.frames.length; f++){
+        if(currentStep.frames[f] !== null){
+          changedFrameIndex = f;
+          break;
         }
       }
     }
